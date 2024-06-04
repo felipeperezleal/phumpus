@@ -3,41 +3,39 @@ from dotenv import load_dotenv
 import discord
 from discord.ext import commands
 import requests
-import json
 import os
+import xmltodict
 
 extractor = URLExtract()
 
-
 def url_finder(msg):
     ext = extractor.find_urls(msg)
-    if ext != []:
+    if ext:
         return ext[0]
-    return 0
+    return None
 
-def check_phishing(link):
-    url = "https://phishing-url-risk-api.p.rapidapi.com/url/"
-
-    querystring = {"url":link}
-
+async def check_phishing(link):
+    url = f"http://checkurl.phishtank.com/checkurl/index.php?url={link}"
     headers = {
-        "x-rapidapi-key": "e561b7f4e8msh53615b41e10226ap1951e5jsn0e544755e251",
-        "x-rapidapi-host": "phishing-url-risk-api.p.rapidapi.com"
+        "User-Agent": "phishtank/phumpus"
     }
+    response = requests.post(url, headers=headers)
+    parsed_response = xmltodict.parse(response.content)
 
-    response = requests.get(url, headers=headers, params=querystring)
+    print(parsed_response['response']['results'])
 
-    print(response.json())
-    
-    api_response = json.loads(response.text)[0]
-    if api_response.get('Ai_model_phishing_risk_class') == "Risky Url":
-        return 'The link is a phishing link'
-    return 'The link is probably safe'
+    try:
+        if parsed_response['response']['results']['url0']['verified'] == "false":
+            return "The link is in the Phishtank database but not verified yet. Please be cautious!"
+        elif parsed_response['response']['results']['url0']['valid'] == "true":
+            return "The link is phishing"
+        elif parsed_response['response']['results']['url0']['valid'] == "false":
+            return "The link is safe!"
+    except:
+        return "The link is safe! (or at least not in the Phishtank database)"
 
 load_dotenv()
-
 TOKEN = os.getenv("DISCORD_TOKEN")
-
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -48,11 +46,13 @@ async def on_message(message):
     user = message.author
     if message.content == "!hey":
         await message.channel.send(f"Hey {user.mention}!")
-    try:
-        if url_finder(message.content) != 0:
-            print(message.content)
-            await message.channel.send(check_phishing(url_finder(message.content)), reference = message)
-    except:
-        print('Error')
+    
+    link = url_finder(message.content)
+    if link:
+        try:
+            response = await check_phishing(link)  # Ensure to await the async function
+            await message.channel.send(response, reference=message)
+        except Exception as e:
+            print(f"Error: {e}")
 
 bot.run(TOKEN)
