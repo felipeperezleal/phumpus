@@ -1,0 +1,2 @@
+#Add your discord token here, additionally add a dot (.) at start of the filename to make it hidden
+DISCORD_TOKEN = 'YOUR DISCORD_TOKEN HERE'
